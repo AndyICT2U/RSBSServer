@@ -15,10 +15,12 @@ var teams = ["red","blue"];
 var attacker = 0;
 
 var gamestates = ["INIT","0ATT","1ATT","OVER"];
-var gamestatus = "WRES";
+var gamestatus = "PEND";
 var attackCell = "";
 var bWaitingForResult = true;
 var resultState = "X";
+var shipsSunk = [0,0];
+const NUMBER_OF_SHIPS = 5;
 
 /*
 function lookupMember(req, res, next) {
@@ -55,34 +57,70 @@ function getGameState() {
 
 rsbsRouter.get('/status/', function(req, res) {
 //  res.setHeader('Content-Type', 'text/html');
-  console.log("STATUS:" + JSON.stringify(req.query));
+  console.log("STATUS:" + JSON.stringify(req.query)+" "+getGameState());
 //  console.log("STATUS:" + JSON.stringify(req.params));
 //  console.log("STATUS:" + req.params.source);
 //  if (req.params.source == teams[attacker]) {
   if (req.query.source == teams[attacker]) {
-      if (getGameState() == "WRES") {
-            res.json({ 'status': 'P', 'cell': attackCell});
-      }
-      if (getGameState() == "RSLT") {
-            res.json({ 'status': resultState, 'cell': attackCell});
-      }
+      // Status request from attacker
+        switch (getGameState()) {
+            case "PEND":
+                res.json({ 'status': 'P', 'cell': attackCell});
+                break;
+            case "WRES":
+                res.json({ 'status': resultState, 'cell': attackCell});
+                break;
+            default:
+                res.json({ 'status': 'P', 'cell': attackCell});
+        }
+//      if (getGameState() == "WRES") {
+//            res.json({ 'status': 'P', 'cell': attackCell});
+//      }
+//      if (getGameState() == "RSLT") {
+//            res.json({ 'status': resultState, 'cell': attackCell});
+//      }
   } else {
-      if (getGameState() == "WRES") {
+      // Status request from defender
+        switch (getGameState()) {
+            case "PEND":
+                res.json({ 'status': 'P', 'cell': attackCell});
+                break;
+            case "WTGT":
+                res.json({ 'status': 'T', 'cell': attackCell});
+                break;
+            default:
+                res.json({ 'status': 'P', 'cell': attackCell});
+        }
+/*      if (getGameState() == "WRES") {
         res.json({ 'status': 'P', 'cell': attackCell});
       }
       if (getGameState() == "TSET") {
         res.json({ 'status': 'T', 'cell': attackCell});
       }
+*/      
   }
 
   res.end();
  });
  
 rsbsRouter.post('/status/', function(req, res) {
-    console.log("POST-STATUS: " + req.body.cell);
+    console.log("POST-STATUS: " + req.body.cell + " " + req.body.status);
     setGameState( "RSLT" );
-    attackCell = req.body.cell;
-    res.statusCode = 200;
+//    if (req.query.source == teams[attacker]) 
+    {
+        var defender = (attacker + 1) % 2;
+        setGameState( "WRES" );
+        resultState = req.body.status;
+        if (resultState == "S") {
+            shipsSunk[defender] = shipsSunk[defender] + 1;
+            if (shipsSunk[defender] == NUMBER_OF_SHIPS) {
+                console.log("Game Over... - probably need new status message!");
+            }
+        }
+        attackCell = req.body.cell;
+        attacker = (attacker + 1) % 2;
+        res.statusCode = 200;
+    }
     res.end();
 });
 
@@ -91,12 +129,17 @@ rsbsRouter.post('/target/', function(req, res) {
 //    req.body.caption,
 
 	console.log(req.body);
-    console.log(teams[attacker]);
     console.log(req.body.source);
+    if (getGameState() == "WRES" && req.body.source != teams[attacker]) {
+        attacker = (attacker + 1) % 2;
+    }
+    console.log(teams[attacker]);
+
     if (req.body.source == teams[attacker]) {
       attackCell = req.body.cell;
       console.log("Attack Cell - " + attackCell);
-      setGameState( "TSET" );
+//      setGameState( "TSET" );
+      setGameState( "WTGT" );
       res.statusCode = 200;
     } else {
       res.statusCode = 404;
